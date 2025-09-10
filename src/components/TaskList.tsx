@@ -1,13 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Calendar, AlertCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
 
 interface Task {
   id: string;
@@ -15,13 +12,57 @@ interface Task {
   description: string;
   completed: boolean;
   priority: "high" | "medium" | "low";
-  due_date: string;
+  dueDate: string;
   category: string;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
 }
 
+const initialTasks: Task[] = [
+  {
+    id: "1",
+    title: "Book venue decorations",
+    description: "Contact florist and arrange centerpieces",
+    completed: false,
+    priority: "high",
+    dueDate: "2024-01-15",
+    category: "Venue",
+  },
+  {
+    id: "2",
+    title: "Send welcome emails to attendees",
+    description: "Draft and send welcome message with event details",
+    completed: true,
+    priority: "medium",
+    dueDate: "2024-01-10",
+    category: "Communication",
+  },
+  {
+    id: "3",
+    title: "Confirm catering menu",
+    description: "Finalize dietary requirements and menu options",
+    completed: false,
+    priority: "high",
+    dueDate: "2024-01-12",
+    category: "Catering",
+  },
+  {
+    id: "4",
+    title: "Set up registration desk",
+    description: "Prepare check-in materials and name badges",
+    completed: false,
+    priority: "medium",
+    dueDate: "2024-01-20",
+    category: "Registration",
+  },
+  {
+    id: "5",
+    title: "Test AV equipment",
+    description: "Check microphones, projectors, and sound system",
+    completed: false,
+    priority: "low",
+    dueDate: "2024-01-18",
+    category: "Technical",
+  },
+];
 
 const priorityColors = {
   high: "bg-destructive text-destructive-foreground",
@@ -30,120 +71,33 @@ const priorityColors = {
 };
 
 export const TaskList = () => {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
-  const { toast } = useToast();
 
-  useEffect(() => {
-    if (user) {
-      fetchTasks();
-    } else {
-      setTasks([]);
-      setLoading(false);
-    }
-  }, [user]);
-
-  const fetchTasks = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setTasks((data || []) as Task[]);
-    } catch (error: any) {
-      toast({
-        title: "Error fetching tasks",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+  const toggleTask = (id: string) => {
+    setTasks(tasks.map(task => 
+      task.id === id ? { ...task, completed: !task.completed } : task
+    ));
   };
 
-  const toggleTask = async (id: string) => {
-    const task = tasks.find(t => t.id === id);
-    if (!task) return;
-
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ completed: !task.completed })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      setTasks(tasks.map(t => 
-        t.id === id ? { ...t, completed: !t.completed } : t
-      ));
-
-      toast({
-        title: task.completed ? "Task marked as incomplete" : "Task completed!",
-        description: `"${task.title}" has been updated.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error updating task",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const addTask = async () => {
-    if (!newTaskTitle.trim() || !user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert([
-          {
-            title: newTaskTitle,
-            description: "",
-            completed: false,
-            priority: "medium",
-            due_date: new Date().toISOString().split('T')[0],
-            category: "General",
-            user_id: user.id,
-          }
-        ])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setTasks([data as Task, ...tasks]);
+  const addTask = () => {
+    if (newTaskTitle.trim()) {
+      const newTask: Task = {
+        id: Date.now().toString(),
+        title: newTaskTitle,
+        description: "",
+        completed: false,
+        priority: "medium",
+        dueDate: new Date().toISOString().split('T')[0],
+        category: "General",
+      };
+      setTasks([...tasks, newTask]);
       setNewTaskTitle("");
-
-      toast({
-        title: "Task added",
-        description: `"${newTaskTitle}" has been added to your task list.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error adding task",
-        description: error.message,
-        variant: "destructive",
-      });
     }
   };
 
   const completedTasks = tasks.filter(task => task.completed).length;
   const totalTasks = tasks.length;
-
-  if (loading) {
-    return (
-      <Card className="shadow-card">
-        <CardContent className="flex items-center justify-center py-8">
-          <div className="text-muted-foreground">Loading tasks...</div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card className="shadow-card">
@@ -201,8 +155,8 @@ export const TaskList = () => {
               )}
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Calendar className="h-3 w-3" />
-                <span>Due: {new Date(task.due_date).toLocaleDateString()}</span>
-                {new Date(task.due_date) < new Date() && !task.completed && (
+                <span>Due: {new Date(task.dueDate).toLocaleDateString()}</span>
+                {new Date(task.dueDate) < new Date() && !task.completed && (
                   <div className="flex items-center gap-1 text-destructive">
                     <AlertCircle className="h-3 w-3" />
                     <span>Overdue</span>
